@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Api\Auth;
 
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class LoginRequest extends FormRequest
 {
@@ -27,5 +29,17 @@ class LoginRequest extends FormRequest
             "device_name" => "required",
             "remember_me" => "boolean"
         ];
+    }
+
+    protected function failedValidation(Validator $validator)
+    {
+        // Throw an HTTP exception with a JSON response
+        throw new HttpResponseException(
+            response()->json([
+                'success' => false,
+                'message' => 'Validation errors occurred.',
+                'errors' => $validator->errors(), // Validation errors
+            ], 422)
+        );
     }
 }

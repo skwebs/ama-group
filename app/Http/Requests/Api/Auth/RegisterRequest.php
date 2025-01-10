@@ -2,11 +2,16 @@
 
 namespace App\Http\Requests\Api\Auth;
 
+use App\Traits\ResponseHelperTrait;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rules\Password;
+
 
 class RegisterRequest extends FormRequest
 {
+    use ResponseHelperTrait;
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -54,5 +59,20 @@ class RegisterRequest extends FormRequest
             "password_confirmation.required" => " Please enter a confirm password",
             "password_confirmation.same" => "Password and Confirm Password should be same",
         ];
+    }
+
+
+    protected function failedValidation(Validator $validator)
+    {
+        // Throw an HTTP exception with a JSON response
+        throw new HttpResponseException(
+            // response()->json([
+            //     'success' => false,
+            //     'message' => 'Validation errors occurred.',
+            //     'data' => null,
+            //     'errors' => $validator->errors()
+            // ], 422)
+            $this->errorResponse('Validation errors occurred.', $validator->errors(), 422)
+        );
     }
 }

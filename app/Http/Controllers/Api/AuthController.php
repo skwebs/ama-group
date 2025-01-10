@@ -2,28 +2,24 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Helper\ResponseHelper;
+// use App\Helper\ResponseHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Auth\LoginRequest;
 use App\Http\Requests\Api\Auth\RegisterRequest;
 use App\Http\Requests\Api\Auth\ResetPasswordRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Traits\ResponseHelperTrait;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Password;
 
 
+
 class AuthController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        //
-    }
+    use ResponseHelperTrait;
 
     /**
      * Store a newly created resource in storage.
@@ -37,53 +33,74 @@ class AuthController extends Controller
                 "mobile" => $request->mobile,
                 "password" => $request->password,
             ]);
+
+            $data = [
+                'user' => new UserResource($user),
+            ];
+
+            // return $this->successResponse(new UserResource($user), "User created successfully");
             if ($user) {
-                return ResponseHelper::success(message: "User created successfully", data: new UserResource($user), statusCode: 201);
+                return $this->successResponse($data, "User created successfully");
             } else {
-                return ResponseHelper::error(message: "User created successfully",  statusCode: 400);
+                return $this->errorResponse("Something went wroing.", [], 400);
             }
         } catch (Exception $e) {
-
-            return ResponseHelper::error(message: "User created successfully",  statusCode: 400);
+            return $this->errorResponse('Failed to create user',  $e->getMessage(), 500);
         }
     }
 
 
 
-    /**
-     * Update the specified resource in storage.
-     */
+
+
     public function login(LoginRequest $request)
     {
         try {
             $credentials = $request->only('email', 'password');
-            // return $request->remember_me;   
-            if (Auth::attempt($credentials, $request->remember_me)) {
-                $user = Auth::user(); // Retrieve authenticated user
-                $token = $user->createToken($credentials['email'])->plainTextToken;
 
-                return ResponseHelper::success(status: "success", message: "Login successful", data: ['user' => new UserResource($user), 'token' => $token], statusCode: 200);
-            } else {
-                // return response()->json(['error' => 'Invalid credentials'], 401);
-                return ResponseHelper::error(status: "error", message: "Invalid login details", statusCode: 401);
+            // Find user by email
+            $user = User::where('email', $request->email)->first();
+
+            // Validate user and credentials
+            if (!$user || !Auth::attempt($credentials, $request->remember_me)) {
+                // return $this->successResponse(new UserResource($user), "User created successfully");
+                return $this->errorResponse("Invalid login details", [], 401);
             }
+
+            // Generate token and attach it to the user object
+            $token = $user->createToken($request->device_name)->plainTextToken;
+
+            $data = [
+                'user' => new UserResource($user),
+                'token' => $token,
+                'token_type' => 'Bearer',
+            ];
+
+            return $this->successResponse($data, "Logged in successfully!");
         } catch (Exception $e) {
-            return ResponseHelper::error(status: "error", message: "Unable to login user", statusCode: 500);
+            return $this->errorResponse($e->getMessage(), [], 500);
         }
     }
 
 
+
     public function logout(Request $request)
     {
-        $request->user()->tokens()->delete();
-
-        return response()->json(['message' => 'Logged out'], 200);
+        try {
+            $request->user()->tokens()->delete();
+            return $this->successResponse(null,  "Logged out successfully!");
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), [], 500);
+        }
     }
 
 
     public function user(Request $request)
     {
-        return ResponseHelper::success(status: "success", message: "User data retrieved successfully", data: ['user' => new UserResource($request->user())], statusCode: 200);
+        $data = [
+            'user' => new UserResource($request->user()),
+        ];
+        return $this->successResponse($data, "User data retrieved successfully");
     }
 
 
@@ -93,27 +110,21 @@ class AuthController extends Controller
         $validated = $request->validate(['email' => 'required|email|exists:users,email']);
 
         Password::sendResetLink($validated);
-
-        return response()->json(['message' => 'Password reset link sent'], 200);
+        return $this->successResponse(null, 'Password reset link sent successfully');
     }
 
     public function resetPassword(ResetPasswordRequest $request)
     {
-        $validated = $request->validate([
-            'email' => 'required|email',
-            'token' => 'required',
-            'password' => 'required|string|min:8|confirmed',
-        ]);
-
         $status = Password::reset(
-            $validated,
             function ($user, $password) {
                 $user->forceFill(['password' => $password])->save();
             }
         );
 
         return $status === Password::PASSWORD_RESET
-            ? response()->json(['message' => 'Password reset successfully'], 200)
-            : response()->json(['message' => 'Invalid token'], 400);
+            ?  $this->successResponse(null, 'Password reset link sent successfully')
+            : $this->errorResponse('Invalid token', [], 400);
+        // ? response()->json(['message' => 'Password reset successfully'], 200)
+        // : response()->json(['message' => 'Invalid token'], 400);
     }
 }
